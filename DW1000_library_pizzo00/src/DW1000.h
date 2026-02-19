@@ -473,6 +473,7 @@ public:
 
 	/* Arduino interrupt handler */
 	static void handleInterrupt();
+	static void loop();
 	
 	/* Allow MAC frame filtering . */
 	// TODO auto-acknowledge

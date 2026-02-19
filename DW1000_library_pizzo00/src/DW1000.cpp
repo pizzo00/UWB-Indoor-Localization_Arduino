@@ -971,57 +971,66 @@ void DW1000Class::tune()
 /* ###########################################################################
  * #### Interrupt handling ###################################################
  * ######################################################################### */
-
+volatile bool _interrupt = false;
 void DW1000Class::handleInterrupt()
 {
-	// read current status and handle via callbacks
-	readSystemEventStatusRegister();
-	if (isClockProblem() /* TODO and others */ && _handleError != 0)
+	_interrupt = true;
+}
+
+void DW1000Class::loop()
+{
+	if (_interrupt)
 	{
-		(*_handleError)();
-	}
-	if (isTransmitDone() && _handleSent != 0)
-	{
-		(*_handleSent)();
-		clearTransmitStatus();
-	}
-	if (isReceiveTimestampAvailable() && _handleReceiveTimestampAvailable != 0)
-	{
-		(*_handleReceiveTimestampAvailable)();
-		clearReceiveTimestampAvailableStatus();
-	}
-	if (isReceiveFailed() && _handleReceiveFailed != 0)
-	{
-		(*_handleReceiveFailed)();
-		clearReceiveStatus();
-		if (_permanentReceive)
+		_interrupt = false;
+		// read current status and handle via callbacks
+		readSystemEventStatusRegister();
+		if (isClockProblem() /* TODO and others */ && _handleError != 0)
 		{
-			newReceive();
-			startReceive();
+			(*_handleError)();
 		}
-	}
-	else if (isReceiveTimeout() && _handleReceiveTimeout != 0)
-	{
-		(*_handleReceiveTimeout)();
-		clearReceiveStatus();
-		if (_permanentReceive)
+		if (isTransmitDone() && _handleSent != 0)
 		{
-			newReceive();
-			startReceive();
+			(*_handleSent)();
+			clearTransmitStatus();
 		}
-	}
-	else if (isReceiveDone() && _handleReceived != 0)
-	{
-		(*_handleReceived)();
-		clearReceiveStatus();
-		if (_permanentReceive)
+		if (isReceiveTimestampAvailable() && _handleReceiveTimestampAvailable != 0)
 		{
-			newReceive();
-			startReceive();
+			(*_handleReceiveTimestampAvailable)();
+			clearReceiveTimestampAvailableStatus();
 		}
+		if (isReceiveFailed() && _handleReceiveFailed != 0)
+		{
+			(*_handleReceiveFailed)();
+			clearReceiveStatus();
+			if (_permanentReceive)
+			{
+				newReceive();
+				startReceive();
+			}
+		}
+		else if (isReceiveTimeout() && _handleReceiveTimeout != 0)
+		{
+			(*_handleReceiveTimeout)();
+			clearReceiveStatus();
+			if (_permanentReceive)
+			{
+				newReceive();
+				startReceive();
+			}
+		}
+		else if (isReceiveDone() && _handleReceived != 0)
+		{
+			(*_handleReceived)();
+			clearReceiveStatus();
+			if (_permanentReceive)
+			{
+				newReceive();
+				startReceive();
+			}
+		}
+		// clear all status that is left unhandled
+		clearAllStatus();
 	}
-	// clear all status that is left unhandled
-	clearAllStatus();
 }
 
 /* ###########################################################################

@@ -331,6 +331,8 @@ uint32_t DEBUGRangeSent;
 
 void DW1000RangingClass::loop()
 {
+	DW1000.loop();
+
 	// we check if needed to reset!
 	checkForReset();
 	uint32_t currentTime = millis();
