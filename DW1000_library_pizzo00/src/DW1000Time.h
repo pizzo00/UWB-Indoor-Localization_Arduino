@@ -65,10 +65,10 @@ public:
 	
 	// constructor
 	DW1000Time();
-	DW1000Time(int64_t time);
-	DW1000Time(byte data[]);
+	explicit DW1000Time(int64_t time);
+	explicit DW1000Time(byte data[]);
 	DW1000Time(const DW1000Time& copy);
-	DW1000Time(float timeUs);
+	explicit DW1000Time(float timeUs);
 	DW1000Time(int32_t value, float factorUs);
 	~DW1000Time();
 	
