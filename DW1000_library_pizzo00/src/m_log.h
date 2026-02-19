@@ -11,6 +11,10 @@ namespace m_log
 {
     void setup();
 
+    int getLogQty();
+    int getCurrentLogIdx();
+    char** getLogs();
+
     void log_err(std::string const& tag, const char* msg, ...);
     void log_war(std::string const& tag, const char* msg, ...);
     void log_inf(std::string const& tag, const char* msg, ...);

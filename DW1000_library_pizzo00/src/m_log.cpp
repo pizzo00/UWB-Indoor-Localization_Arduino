@@ -6,6 +6,15 @@
 
 namespace m_log
 {
+    #define SAVE_LOGS false
+
+    #if SAVE_LOGS
+        ushort logs_idx = 0;
+        ushort LOGS_QTY = 100;
+        ushort LOGS_LEN = 251;
+        char** logs;
+    #endif
+
     enum class LOG_LEVEL
     {
         m_VERBOSE = 0,
@@ -20,6 +29,15 @@ namespace m_log
 
     void setup()
     {
+#if SAVE_LOGS
+        logs = (char**)malloc(sizeof(char*) * LOGS_QTY);
+        for(int i = 0; i < LOGS_QTY; i++)
+        {
+            logs[i] = (char*)malloc(sizeof(char) * LOGS_LEN);
+            strcpy(logs[i], "");
+        }
+#endif
+
         gloablLogLevels = LOG_LEVEL::m_INFO;
         
         logLevels[LOG_DW1000] = LOG_LEVEL::m_VERBOSE;
@@ -31,6 +49,11 @@ namespace m_log
         LOG_LEVEL minLevel = logLevels.count(tag) ? logLevels[tag] : gloablLogLevels;
         if(level >= minLevel)
         {
+#if SAVE_LOGS
+            vsnprintf (logs[logs_idx], LOGS_LEN-1, msg, args);
+            Serial.println(logs[logs_idx]);
+            logs_idx = (logs_idx + 1) % LOGS_QTY;
+#else
             // https://arduino.stackexchange.com/a/72456
             for(const char* i=msg; *i!=0; ++i) {
                 if(*i!='%') { Serial.print(*i); continue; }
@@ -45,6 +68,7 @@ namespace m_log
                 }
             }
             Serial.println();
+#endif
             va_end(args);
         }
     }
@@ -54,4 +78,31 @@ namespace m_log
     void log_inf(std::string const& tag, const char* msg, ...) { std::va_list args; va_start(args, msg); log(tag, LOG_LEVEL::m_INFO, msg, args); }
     void log_dbg(std::string const& tag, const char* msg, ...) { std::va_list args; va_start(args, msg); log(tag, LOG_LEVEL::m_DEBUG, msg, args); }
     void log_vrb(std::string const& tag, const char* msg, ...) { std::va_list args; va_start(args, msg); log(tag, LOG_LEVEL::m_VERBOSE, msg, args); }
+
+    int getLogQty()
+    {
+#if SAVE_LOGS
+        return LOGS_QTY;
+#else
+        return 0;
+#endif
+    }
+
+    int getCurrentLogIdx()
+    {
+#if SAVE_LOGS
+        return logs_idx;
+#else
+        return 0;
+#endif
+    }
+
+    char** getLogs()
+    {
+#if SAVE_LOGS
+        return logs;
+#else
+        return null;
+#endif
+    }
 }
