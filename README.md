@@ -1,6 +1,16 @@
 # UWB-Indoor-Localization
 
 ## Indoor localization using ESP32_UWB (DW1000) tags and anchors
+UPDATE 1/9/2026
+
+Core Electronics is now selling AI-Thinker BU-03 kits using the DW3000 ranging module and an STM32 MCU, which supports more than five modules in the ranging setup. That is, more than 4 anchors are allowed, and possibly more than 1 tag. Arduino code is provided that uses the same least squares algorithm discussed here.
+
+See https://core-electronics.com.au/guides/diy-2d-and-3d-spatial-tracking-with-ultra-wideband-arduino-and-pico-guide/
+
+UPDATE 10/13/2024:  
+1. A new version of Thomas Trojer's DW1000 library was recently uploaded by Pizzolato Davide, reportedly with errors corrected for > 5 tags+anchors. Many changes were made to the library. Unfortunately I have not been able obtain ranging information from the original ESP32-UWB boards by MakerFabs. See issue #22. If anyone has successfully obtained ranges using this library, please contact me, or add comments to the issue thread.
+  
+2. New 3D positioning code for N>4 anchors uploaded, currently working for simulations (see folder trilateration_tests_C). I'm now working on implementating it with ESP32-UWB boards. 
 
 WARNING 7/10/2023: There appears to be a problem with Thomas Trojer's DW1000 library that limits the number of anchors to four.
 
@@ -23,9 +33,9 @@ This repository provides working example code for using Makerfabs ESP32_UWB modu
 The code makes extensive use of the DW1000 library by Thomas Trojer (https://github.com/thotro/arduino-dw1000), source code copied here for convenience, with
 minor changes required to eliminate compilation errors using the ESP32_Arduino IDE. I've added code that is required for the tag autocalibrate procedure, so please use the library version in this repository.
 
-The tag code collects distances to all anchors and solves the linear least squares problem of computing the tag location from known distances and anchor locations. For the method, see this short technical paper: https://www.th-luebeck.de/fileadmin/media_cosa/Dateien/Veroeffentlichungen/Sammlung/TR-2-2015-least-sqaures-with-ToA.pdf
+The tag code collects distances to all anchors and solves the linear least squares problem of computing the tag location from known distances and anchor locations. For the method, see this short technical paper: https://www.th-luebeck.de/fileadmin/media_cosa/Dateien/Veroeffentlichungen/Sammlung/TR-2-2015-least-sqaures-with-ToA.pdf (proposed earlier by other authors -- variations of this technique are reviewed in an open access publication: https://jwcn-eurasipjournals.springeropen.com/articles/10.1186/s13638-015-0298-1)
 
-Avantages of this particular approach (one of many) include its marvelous simplicity, linearity, high speed, accuracy, and that the normal "A" matrix depends only on the anchor configuration, and thus potentially unstable matrix inversion needs to happen only once.
+Advantages of this particular approach include its marvelous simplicity, linearity, high speed, accuracy, and that the normal "A" matrix depends only on the anchor configuration, and thus potentially unstable matrix inversion needs to happen only once.
 
 ### HARDWARE REQUIRED: four (2D), five (3D) or more ESP32_UWB modules from makerfabs:
 https://www.makerfabs.com/esp32-uwb-ultra-wideband.html
