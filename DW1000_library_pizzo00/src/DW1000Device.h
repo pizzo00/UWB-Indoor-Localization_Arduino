@@ -67,7 +67,7 @@ public:
 	DW1000Time timeRangeSent;
 	DW1000Time timeRangeReceived;
 
-	bool hasSentPoolAck;
+	bool hasSentPollAck;
 
 	DW1000Time timePollAckReceivedMinusPollSent;
 	DW1000Time timeRangeSentMinusPollAckReceived;

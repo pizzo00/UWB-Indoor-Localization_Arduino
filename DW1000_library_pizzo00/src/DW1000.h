@@ -245,7 +245,7 @@ public:
 	static void         setData(byte data[], uint16_t n);
 	static void         setData(const String& data);
 	static void         getData(byte data[], uint16_t n);
-	static void         getData(String& data);
+	static bool 		getData(byte data[], uint16_t maxLength, uint16_t& dataLength);
 	static uint16_t     getDataLength();
 	static void         getTransmitTimestamp(DW1000Time& time);
 	static void         getReceiveTimestamp(DW1000Time& time);

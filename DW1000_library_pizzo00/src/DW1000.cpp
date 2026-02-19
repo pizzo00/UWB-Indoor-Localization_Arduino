@@ -1792,25 +1792,14 @@ void DW1000Class::getData(byte data[], uint16_t n)
 	readBytes(RX_BUFFER, NO_SUB, data, n);
 }
 
-void DW1000Class::getData(String &data)
+bool DW1000Class::getData(byte data[], uint16_t maxLength, uint16_t &dataLength)
 {
-	uint16_t i;
-	uint16_t n = getDataLength(); // number of bytes w/o the two FCS ones
-	if (n <= 0)
-	{ // TODO
-		return;
-	}
-	byte *dataBytes = (byte *)malloc(n);
-	getData(dataBytes, n);
-	// clear string
-	data.remove(0);
-	data = "";
-	// append to string
-	for (i = 0; i < n; i++)
-	{
-		data += (char)dataBytes[i];
-	}
-	free(dataBytes);
+	dataLength = getDataLength(); // number of bytes w/o the two FCS ones
+	if (dataLength <= 0 || maxLength < dataLength)
+		return false;
+
+	getData(data, dataLength);
+	return true;
 }
 
 void DW1000Class::getTransmitTimestamp(DW1000Time &time)

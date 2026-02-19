@@ -179,8 +179,8 @@ private:
 
 	// ANCHOR ranging protocol
 	static void transmitInit();
-	static void transmit(byte datas[]);
-	static void transmit(byte datas[], DW1000Time time);
+	static void transmit(byte datas[], uint16_t len);
+	static void transmit(byte datas[], uint16_t len, DW1000Time time);
 	static void transmitBlink();
 	static void transmitRangingInit(u_int16_t delay = 0);
 	static void transmitPollAck(DW1000Device *myDistantDevice, u_int16_t delay);

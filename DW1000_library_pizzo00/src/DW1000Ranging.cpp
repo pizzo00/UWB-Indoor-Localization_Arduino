@@ -410,11 +410,11 @@ void DW1000RangingClass::loop()
 
 				DEBUGtimePollSent = millis();
 
-				// we save the value for all the devices !
+				// TODO only for the ones contacted
 				for (uint8_t i = 0; i < _networkDevicesNumber; i++)
 				{
 					_networkDevices[i].timePollSent = timePollSent;
-					_networkDevices[i].hasSentPoolAck = false;
+					_networkDevices[i].hasSentPollAck = false;
 				}
 			}
 			else if (messageType == MessageType::RANGE)
@@ -437,7 +437,13 @@ void DW1000RangingClass::loop()
 
 		// we read the datas from the modules:
 		//  get message and parse
-		DW1000.getData(receivedData, LEN_DATA);
+		u_int16_t dataLength;
+		receivedData[0] = receivedData[1] = 0;
+		if(!DW1000.getData(receivedData, LEN_DATA, dataLength))
+		{
+			m_log::log_dbg(LOG_DW1000_MSG, "Error received dataLength %d", dataLength);
+			return;
+		}
 
 		MessageType messageType = detectMessageType(receivedData);
 
@@ -477,12 +483,11 @@ void DW1000RangingClass::loop()
 
 			bool knownByTheTag = false;
 
-			uint8_t numberDevices = receivedData[BLINK_MAC_LEN];
-			for (uint8_t i = 0; i < numberDevices; i++)
+			for (uint8_t i = BLINK_MAC_LEN; i < dataLength; i += 2)
 			{
 				// we check if the tag know us
 				byte shortAddress[2];
-				memcpy(shortAddress, receivedData + BLINK_MAC_LEN + 1 + i * 2, 2);
+				memcpy(shortAddress, receivedData + i, 2);
 				// we test if the short address is our address
 				if (shortAddress[0] == _ownShortAddress[0] &&
 					shortAddress[1] == _ownShortAddress[1])
@@ -581,9 +586,10 @@ void DW1000RangingClass::loop()
 
 					// we receive a POLL which is a broadcast message
 					// we need to grab info about it
-					uint8_t numberDevices = receivedData[SHORT_MAC_LEN + 1];
+					uint8_t freeSlots = receivedData[SHORT_MAC_LEN + 1];
+					uint8_t devicesCount = (dataLength - (SHORT_MAC_LEN+2)) / pollDeviceSize;
 
-					for (uint8_t i = 0; i < numberDevices; i++)
+					for (uint8_t i = 0; i < devicesCount; i++)
 					{
 						// we need to test if this value is for us:
 						// we grab the mac address of each devices:
@@ -597,8 +603,8 @@ void DW1000RangingClass::loop()
 							myDistantDevice->noteActivity(); // Poll is for us
 
 							// we grab the replytime which is for us
-							uint16_t replyTime = getReplyTimeOfIndex(i);
-							memcpy(&replyTime, receivedData + SHORT_MAC_LEN + 2 + 2 + i * pollDeviceSize, 2);
+							uint16_t replyTime = getReplyTimeOfIndex(i+freeSlots);
+							//memcpy(&replyTime, receivedData + SHORT_MAC_LEN + 2 + 2 + i * pollDeviceSize, 2);
 
 							// on POLL we (re-)start, so no protocol failure
 							_protocolFailed = false;
@@ -615,7 +621,7 @@ void DW1000RangingClass::loop()
 					// Remove mydistantdevice, non ci conosce, oppure send ranginginit
 					// removeNetworkDevices(myDistantDevice->getIndex());
 
-					int randomSlot = random(0, pollAckTimeSlots - numberDevices);
+					int randomSlot = random(0, freeSlots);
 					uint16_t replyTime = getReplyTimeOfIndex(randomSlot);
 					transmitRangingInit(replyTime);
 				}
@@ -718,16 +724,14 @@ void DW1000RangingClass::loop()
 				// we test if the short address is our address
 				if (receivedData[6] != _ownShortAddress[0] ||
 					receivedData[5] != _ownShortAddress[1])
-				{
 					return;
-				}
 
 				if (messageType == MessageType::POLL_ACK)
 				{
 					DW1000.getReceiveTimestamp(myDistantDevice->timePollAckReceived);
 					// we note activity for our device:
 					myDistantDevice->noteActivity();
-					myDistantDevice->hasSentPoolAck = true;
+					myDistantDevice->hasSentPollAck = true;
 
 					// Serial.println(DW1000.getReceivePower());
 					// Serial.println(DW1000.getFirstPathPower());
@@ -847,17 +851,21 @@ void DW1000RangingClass::transmitInit()
 	DW1000.setDefaults();
 }
 
-void DW1000RangingClass::transmit(byte datas[])
+void DW1000RangingClass::transmit(byte datas[], uint16_t dataLength)
 {
-	DW1000.setData(datas, LEN_DATA);
+	if (dataLength <= 0 || LEN_DATA < dataLength)
+	{
+		m_log::log_dbg(LOG_DW1000_MSG, "Error try transmit with dataLength %d", dataLength);
+		return;
+	}
+	DW1000.setData(datas, dataLength);
 	DW1000.startTransmit();
 }
 
-void DW1000RangingClass::transmit(byte datas[], DW1000Time time)
+void DW1000RangingClass::transmit(byte datas[], uint16_t len, DW1000Time time)
 {
 	DW1000.setDelay(time);
-	DW1000.setData(datas, LEN_DATA);
-	DW1000.startTransmit();
+	transmit(datas, len);
 }
 
 void DW1000RangingClass::transmitBlink()
@@ -868,12 +876,13 @@ void DW1000RangingClass::transmitBlink()
 	transmitInit();
 	_globalMac.generateBlinkFrame(sentData, _ownShortAddress);
 
-	sentData[BLINK_MAC_LEN] = _networkDevicesNumber;
-	for (uint8_t i = 0; i < _networkDevicesNumber; i++)
+	uint8_t devicesCount = _networkDevicesNumber < devicePerBlinkTransmit ? _networkDevicesNumber : devicePerBlinkTransmit;
+
+	for (uint8_t i = 0; i < devicesCount; i++)
 	{
-		memcpy(sentData + BLINK_MAC_LEN + 1 + i * 2, _networkDevices[i].getByteShortAddress(), 2);
+		memcpy(sentData + BLINK_MAC_LEN + i * 2, _networkDevices[i].getByteShortAddress(), 2);
 	}
-	transmit(sentData);
+	transmit(sentData, BLINK_MAC_LEN + devicesCount * 2);
 
 	byte shortBroadcast[2] = {0xFF, 0xFF};
 	copyShortAddress(_lastSentToShortAddress, shortBroadcast);
@@ -890,8 +899,10 @@ void DW1000RangingClass::transmitRangingInit(u_int16_t delay)
 
 	copyShortAddress(_lastSentToShortAddress, shortBroadcast);
 
-	DW1000Time deltaTime = DW1000Time(delay, DW1000Time::MICROSECONDS);
-	transmit(sentData, deltaTime);
+	DW1000Time deltaTime(delay, DW1000Time::MICROSECONDS);
+	transmit(sentData, SHORT_MAC_LEN+1, deltaTime);
+}
+
 }
 
 void DW1000RangingClass::transmitPoll()
@@ -902,14 +913,15 @@ void DW1000RangingClass::transmitPoll()
 	_timerDelay = _rangeInterval + (uint16_t)(pollAckTimeSlots * 3 * DEFAULT_REPLY_DELAY_TIME / 1000); // TODO meglio fermare il timer forse
 
 	uint8_t devicesCount = _networkDevicesNumber < devicePerPollTransmit ? _networkDevicesNumber : devicePerPollTransmit;
-
+	
 	byte shortBroadcast[2] = {0xFF, 0xFF};
 	_globalMac.generateShortMACFrame(sentData, _ownShortAddress, shortBroadcast);
 	sentData[SHORT_MAC_LEN] = static_cast<byte>(MessageType::POLL);
-	// we enter the number of devices
-	sentData[SHORT_MAC_LEN + 1] = devicesCount;
-
+	
 	uint8_t freeSlots = pollAckTimeSlots - devicesCount;
+	
+	// we enter the number of free slots
+	sentData[SHORT_MAC_LEN + 1] = freeSlots;
 
 	for (uint8_t i = 0; i < devicesCount; i++)
 	{
@@ -920,8 +932,8 @@ void DW1000RangingClass::transmitPoll()
 		memcpy(sentData + SHORT_MAC_LEN + 2 + i * pollDeviceSize, _networkDevices[i].getByteShortAddress(), 2);
 
 		// we add the replyTime
-		uint16_t replyTime = _networkDevices[i].getReplyTime();
-		memcpy(sentData + SHORT_MAC_LEN + 2 + 2 + i * pollDeviceSize, &replyTime, 2);
+		// uint16_t replyTime = _networkDevices[i].getReplyTime();
+		// memcpy(sentData + SHORT_MAC_LEN + 2 + 2 + i * pollDeviceSize, &replyTime, 2);
 
 		_addressOfExpectedLastPollAck = _networkDevices[i].getShortAddress();
 	}
@@ -934,7 +946,7 @@ void DW1000RangingClass::transmitPoll()
 
 	copyShortAddress(_lastSentToShortAddress, shortBroadcast);
 
-	transmit(sentData);
+	transmit(sentData, SHORT_MAC_LEN + 2 + devicesCount * pollDeviceSize);
 }
 
 void DW1000RangingClass::transmitPollAck(DW1000Device *myDistantDevice, u_int16_t delay)
@@ -943,9 +955,9 @@ void DW1000RangingClass::transmitPollAck(DW1000Device *myDistantDevice, u_int16_
 	_globalMac.generateShortMACFrame(sentData, _ownShortAddress, myDistantDevice->getByteShortAddress());
 	sentData[SHORT_MAC_LEN] = static_cast<byte>(MessageType::POLL_ACK);
 	// delay the same amount as ranging tag
-	DW1000Time deltaTime = DW1000Time(delay, DW1000Time::MICROSECONDS);
+	DW1000Time deltaTime(delay, DW1000Time::MICROSECONDS);
 	copyShortAddress(_lastSentToShortAddress, myDistantDevice->getByteShortAddress());
-	transmit(sentData, deltaTime);
+	transmit(sentData, SHORT_MAC_LEN+1, deltaTime);
 }
 
 void DW1000RangingClass::transmitRange()
@@ -963,7 +975,7 @@ void DW1000RangingClass::transmitRange()
 	DW1000Device *devices[devicePerTransmit];
 	for (uint8_t i = 0; i < _networkDevicesNumber && devicesCount < devicePerTransmit; i++)
 	{
-		if (_networkDevices[i].hasSentPoolAck)
+		if (_networkDevices[i].hasSentPollAck)
 		{
 			devices[devicesCount++] = &_networkDevices[i];
 		}
@@ -981,7 +993,7 @@ void DW1000RangingClass::transmitRange()
 	sentData[SHORT_MAC_LEN + 1] = devicesCount;
 
 	// delay sending the message and remember expected future sent timestamp
-	DW1000Time deltaTime = DW1000Time(DEFAULT_REPLY_DELAY_TIME, DW1000Time::MICROSECONDS);
+	DW1000Time deltaTime(DEFAULT_REPLY_DELAY_TIME, DW1000Time::MICROSECONDS);
 	DW1000Time timeRangeSent = DW1000.setDelay(deltaTime);
 
 	for (uint8_t i = 0; i < devicesCount; i++)
@@ -1003,7 +1015,7 @@ void DW1000RangingClass::transmitRange()
 
 	copyShortAddress(_lastSentToShortAddress, shortBroadcast);
 
-	transmit(sentData);
+	transmit(sentData, SHORT_MAC_LEN + 2 + rangeDeviceSize * devicesCount);
 }
 
 void DW1000RangingClass::transmitRangeReport(DW1000Device *myDistantDevice, u_int16_t delay)
@@ -1015,10 +1027,10 @@ void DW1000RangingClass::transmitRangeReport(DW1000Device *myDistantDevice, u_in
 	float curRange = myDistantDevice->getRange();
 	float curRXPower = myDistantDevice->getRXPower();
 	// We add the Range and then the RXPower
-	memcpy(sentData + 1 + SHORT_MAC_LEN, &curRange, 4);
-	memcpy(sentData + 5 + SHORT_MAC_LEN, &curRXPower, 4);
+	memcpy(sentData + SHORT_MAC_LEN + 1, &curRange, 4);
+	memcpy(sentData + SHORT_MAC_LEN + 5, &curRXPower, 4);
 	copyShortAddress(_lastSentToShortAddress, myDistantDevice->getByteShortAddress());
-	transmit(sentData, DW1000Time(delay, DW1000Time::MICROSECONDS));
+	transmit(sentData, SHORT_MAC_LEN + 9, DW1000Time(delay, DW1000Time::MICROSECONDS));
 }
 
 void DW1000RangingClass::transmitRangeFailed(DW1000Device *myDistantDevice)
@@ -1028,7 +1040,7 @@ void DW1000RangingClass::transmitRangeFailed(DW1000Device *myDistantDevice)
 	sentData[SHORT_MAC_LEN] = static_cast<byte>(MessageType::RANGE_FAILED);
 
 	copyShortAddress(_lastSentToShortAddress, myDistantDevice->getByteShortAddress());
-	transmit(sentData);
+	transmit(sentData, SHORT_MAC_LEN+1);
 }
 
 void DW1000RangingClass::receiver()
