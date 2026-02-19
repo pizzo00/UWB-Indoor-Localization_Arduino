@@ -423,13 +423,14 @@ void DW1000RangingClass::loop()
 			}
 			else if (messageType == MessageType::RANGE)
 			{
-				DW1000Time timeRangeSent;
-				DW1000.getTransmitTimestamp(timeRangeSent);
-				// we save the value for all the devices !
-				for (uint8_t i = 0; i < _networkDevicesNumber; i++)
-				{
-					_networkDevices[i].timeRangeSent = timeRangeSent;
-				}
+				// Removed, message already sent
+				// DW1000Time timeRangeSent;
+				// DW1000.getTransmitTimestamp(timeRangeSent);
+				// // we save the value for all the devices !
+				// for (uint8_t i = 0; i < _networkDevicesNumber; i++)
+				// {
+				// 	_networkDevices[i].timeRangeSent = timeRangeSent;
+				// }
 			}
 		}
 	}
