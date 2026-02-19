@@ -92,6 +92,11 @@ public:
 	static void attachNewDevice(void (*handleNewDevice)(DW1000Device *)) { _handleNewDevice = handleNewDevice; };
 	static void attachInactiveDevice(void (*handleInactiveDevice)(DW1000Device *)) { _handleInactiveDevice = handleInactiveDevice; };
 	static void attachRemovedDeviceMaxReached(void (*handleRemovedDeviceMaxReached)(DW1000Device *)) { _handleRemovedDeviceMaxReached = handleRemovedDeviceMaxReached; };
+
+	// Millis between one range and another
+	static uint16_t _rangeInterval;
+	static uint8_t devicePerPollTransmit;
+	static uint8_t pollAckTimeSlots;
 	
 private:
 	// Initialization
@@ -127,6 +132,7 @@ private:
 private:
 	// Other devices in the network
 	static DW1000Device _networkDevices[MAX_DEVICES];
+	static uint8_t _networkDeviceIndexes[MAX_DEVICES];
 	static volatile uint8_t _networkDevicesNumber;
 	static byte _ownLongAddress[8];
 	static byte _ownShortAddress[2];
@@ -162,8 +168,6 @@ private:
 	static uint32_t _resetPeriod;
 	// Timer Tick delay
 	static uint16_t _timerDelay;
-	// Millis between one range and another
-	static uint16_t _rangeInterval;
 	// Ranging counter (per second)
 	static uint32_t _rangingCountPeriod;
 

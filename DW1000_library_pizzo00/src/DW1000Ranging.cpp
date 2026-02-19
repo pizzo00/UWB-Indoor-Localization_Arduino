@@ -32,10 +32,12 @@
 DW1000RangingClass DW1000Ranging;
 
 constexpr short rangeDeviceSize = 12;
-constexpr short pollDeviceSize = 4;
-constexpr uint8_t devicePerPollTransmit = 4;
-constexpr uint8_t pollAckTimeSlots = 6;
+constexpr short pollDeviceSize = 2;
+constexpr uint8_t devicePerBlinkTransmit = 43;
+uint8_t DW1000RangingClass::devicePerPollTransmit;
+uint8_t DW1000RangingClass::pollAckTimeSlots;
 
+uint8_t DW1000RangingClass::_networkDeviceIndexes[MAX_DEVICES];
 DW1000Device DW1000RangingClass::_networkDevices[MAX_DEVICES];
 byte DW1000RangingClass::_ownLongAddress[8];
 byte DW1000RangingClass::_ownShortAddress[2];
@@ -76,6 +78,8 @@ void DW1000RangingClass::init(BoardType type, uint16_t shortAddress, const char 
 
 void DW1000RangingClass::init(BoardType type, const uint8_t *wifiMacAddress, uint16_t shortAddress, bool high_power, const byte mode[], uint8_t myRST, uint8_t mySS, uint8_t myIRQ)
 {
+	devicePerPollTransmit = 6;
+	pollAckTimeSlots = 8;
 	_networkDevicesNumber = 0;
 	_sentAck = false;
 	_receivedAck = false;
@@ -903,6 +907,23 @@ void DW1000RangingClass::transmitRangingInit(u_int16_t delay)
 	transmit(sentData, SHORT_MAC_LEN+1, deltaTime);
 }
 
+void shuffle_array(uint8_t array[], uint8_t length)
+{
+	// Fisher–Yates shuffle
+	uint8_t tmp, i, j;
+
+	// init array from 0 to length-1
+	for (i = 0; i < length; i++)
+		array[i] = i;
+	
+	for (i = length-1; i > 0; i--)
+	{ 
+		j = rand() % (i + 1);
+		// swap i/j
+		tmp = array[i]; 
+		array[i] = array[j]; 
+		array[j] = tmp;
+	}
 }
 
 void DW1000RangingClass::transmitPoll()
@@ -923,19 +944,21 @@ void DW1000RangingClass::transmitPoll()
 	// we enter the number of free slots
 	sentData[SHORT_MAC_LEN + 1] = freeSlots;
 
+	shuffle_array(_networkDeviceIndexes, devicesCount);
+	
 	for (uint8_t i = 0; i < devicesCount; i++)
 	{
 		// each devices have a different reply delay time.
-		_networkDevices[i].setReplyTime(getReplyTimeOfIndex(i+freeSlots));
+		_networkDevices[_networkDeviceIndexes[i]].setReplyTime(getReplyTimeOfIndex(i+freeSlots));
 
 		// we write the short address of our device:
-		memcpy(sentData + SHORT_MAC_LEN + 2 + i * pollDeviceSize, _networkDevices[i].getByteShortAddress(), 2);
+		memcpy(sentData + SHORT_MAC_LEN + 2 + i * pollDeviceSize, _networkDevices[_networkDeviceIndexes[i]].getByteShortAddress(), 2);
 
 		// we add the replyTime
 		// uint16_t replyTime = _networkDevices[i].getReplyTime();
 		// memcpy(sentData + SHORT_MAC_LEN + 2 + 2 + i * pollDeviceSize, &replyTime, 2);
 
-		_addressOfExpectedLastPollAck = _networkDevices[i].getShortAddress();
+		_addressOfExpectedLastPollAck = _networkDevices[_networkDeviceIndexes[i]].getShortAddress();
 	}
 
 	// if (_networkDevicesNumber > 0)
