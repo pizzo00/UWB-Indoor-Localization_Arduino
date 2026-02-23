@@ -166,25 +166,35 @@ void DW1000Class::reselect(uint8_t ss)
 	digitalWrite(_ss, HIGH);
 }
 
+TaskHandle_t DW1000Class::xHandleUwbInterrupt;
+SemaphoreHandle_t DW1000Class::interruptSemaphore = NULL;
+
 void DW1000Class::begin(uint8_t irq, uint8_t rst)
 {
-	// generous initial init/wake-up-idle delay
-	delay(5);
-	// Configure the IRQ pin as INPUT. Required for correct interrupt setting for ESP8266
+	// Generous initial init/wake-up-idle delay
+	vTaskDelay(pdMS_TO_TICKS(5));
+
+	// Configure the IRQ pin as INPUT
 	pinMode(irq, INPUT);
-	// start SPI
+
+	// Start SPI
 	SPI.begin();
-	// #ifndef ESP8266
-	// 	SPI.usingInterrupt(digitalPinToInterrupt(irq)); // not every board support this, e.g. ESP8266
-	// #endif
-	// pin and basic member setup
+
+	// Pin and basic member setup
 	_rst = rst;
 	_irq = irq;
 	_deviceMode = IDLE_MODE;
-	// attach interrupt
-	// attachInterrupt(_irq, DW1000Class::handleInterrupt, CHANGE); // todo interrupt for ESP8266
-	// TODO throw error if pin is not a interrupt pin
-	attachInterrupt(digitalPinToInterrupt(_irq), DW1000Class::handleInterrupt, RISING); // todo interrupt for ESP8266
+
+	// Attach interrupt for ESP32
+	interruptSemaphore = xSemaphoreCreateCounting(100, 0);
+	attachInterrupt(digitalPinToInterrupt(_irq), DW1000Class::handleInterrupt, RISING);
+	vTaskDelay(pdMS_TO_TICKS(5));
+	if (xHandleUwbInterrupt != NULL)
+	{
+		vTaskDelete(xHandleUwbInterrupt);
+		xHandleUwbInterrupt = NULL;
+	}
+	xTaskCreate(&processInterrupt, "UWB-Interrupt", 4 * 1024, NULL, 2, &xHandleUwbInterrupt);
 }
 
 void DW1000Class::manageLDE()
@@ -971,17 +981,19 @@ void DW1000Class::tune()
 /* ###########################################################################
  * #### Interrupt handling ###################################################
  * ######################################################################### */
-volatile bool _interrupt = false;
-void DW1000Class::handleInterrupt()
-{
-	_interrupt = true;
+void IRAM_ATTR DW1000Class::handleInterrupt() {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(interruptSemaphore, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken == pdTRUE)
+        portYIELD_FROM_ISR();
 }
 
-void DW1000Class::loop()
+void DW1000Class::processInterrupt(void *pvParameter)
 {
-	if (_interrupt)
+    for(;;)
 	{
-		_interrupt = false;
+		xSemaphoreTake(interruptSemaphore, portMAX_DELAY);
+
 		// read current status and handle via callbacks
 		readSystemEventStatusRegister();
 		if (isClockProblem() /* TODO and others */ && _handleError != 0)
@@ -1031,6 +1043,7 @@ void DW1000Class::loop()
 		// clear all status that is left unhandled
 		clearAllStatus();
 	}
+	vTaskDelete(NULL);
 }
 
 /* ###########################################################################

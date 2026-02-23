@@ -472,8 +472,11 @@ public:
 	static boolean _debounceClockEnabled;
 
 	/* Arduino interrupt handler */
-	static void handleInterrupt();
-	static void loop();
+	static TaskHandle_t xHandleUwbInterrupt;
+	static SemaphoreHandle_t interruptSemaphore;
+	static void processInterrupt(void *pvParameter);
+
+	static IRAM_ATTR void handleInterrupt();
 	
 	/* Allow MAC frame filtering . */
 	// TODO auto-acknowledge

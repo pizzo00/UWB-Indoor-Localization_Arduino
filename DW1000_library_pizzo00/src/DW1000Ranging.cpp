@@ -335,8 +335,6 @@ uint32_t DEBUGRangeSent;
 
 void DW1000RangingClass::loop()
 {
-	DW1000.loop();
-
 	// we check if needed to reset!
 	checkForReset();
 	uint32_t currentTime = millis();
@@ -945,7 +943,7 @@ void DW1000RangingClass::transmitPoll()
 	// we enter the number of free slots
 	sentData[SHORT_MAC_LEN + 1] = freeSlots;
 
-	shuffle_array(_networkDeviceIndexes, devicesCount);
+	shuffle_array(_networkDeviceIndexes, _networkDevicesNumber);
 	
 	for (uint8_t i = 0; i < devicesCount; i++)
 	{
